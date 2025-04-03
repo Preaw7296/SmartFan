@@ -1,26 +1,30 @@
-import org.eclipse.paho.client.mqttv3.*;
+import paho.mqtt.client as mqtt
 
-public class FanController {
-    public static void main(String[] args) throws MqttException {
-        String broker = "tcp://your-render-server-url:1883";
-        String clientId = "JavaClient";
-        String topicSub = "sensor/data";
-        String topicPub = "fan/control";
+broker = "tcp://your-render-server-url:1883"
+client_id = "PythonClient"
+topic_sub = "sensor/data"
+topic_pub = "fan/control"
 
-        MqttClient client = new MqttClient(broker, clientId);
-        client.connect();
-        client.subscribe(topicSub, (topic, message) -> {
-            String payload = new String(message.getPayload());
-            System.out.println("Received: " + payload);
+def on_message(client, userdata, message):
+    payload = message.payload.decode("utf-8")
+    print(f"Received: {payload}")
 
-            if (payload.contains("\"temperature\":")) {
-                double temp = Double.parseDouble(payload.split(":")[1].split(",")[0]);
-                if (temp > 30) {
-                    client.publish(topicPub, new MqttMessage("ON".getBytes()));
-                } else {
-                    client.publish(topicPub, new MqttMessage("OFF".getBytes()));
-                }
-            }
-        });
-    }
-}
+    if "\"temperature\":" in payload:
+        try:
+            temp = float(payload.split(":")[1].split(",")[0])
+            if temp > 30:
+                client.publish(topic_pub, "ON")
+                print("Fan turned ON")
+            else:
+                client.publish(topic_pub, "OFF")
+                print("Fan turned OFF")
+        except ValueError:
+            print("Error parsing temperature")
+
+client = mqtt.Client(client_id)
+client.connect("your-render-server-url", 1883)
+client.subscribe(topic_sub)
+client.on_message = on_message
+
+print("MQTT client started...")
+client.loop_forever()
