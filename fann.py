@@ -1,4 +1,4 @@
- paho.mqtt.client as mqtt
+import paho.mqtt.client as mqtt
 
 broker = "your-render-server-url"
 client_id = "PythonClient"
