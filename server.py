@@ -1,139 +1,141 @@
 from flask import Flask, request, jsonify, render_template_string
+import datetime
 
-# สร้างแอปพลิเคชัน Flask
 app = Flask(__name__)
 
-# ตัวแปรเพื่อเก็บข้อมูลเซ็นเซอร์
 sensor_data = {
     "temperature": 0,
     "humidity": 0,
-    "soil_moisture": 0,
-    "threshold": 50  # ค่าเริ่มต้นของ threshold
+    "pm25": 0
 }
 
-# Endpoint สำหรับรับข้อมูลเซ็นเซอร์
-@app.route('/', methods=['GET'])
-def get_data():
+@app.route("/", methods=["GET", "POST"])
+def data_api():
+    if request.method == "POST":
+        data = request.get_json()
+        if data:
+            sensor_data.update(data)
+            return jsonify({"status": "success"})
+        return jsonify({"error": "Invalid data"}), 400
     return jsonify(sensor_data)
 
-# Endpoint สำหรับอัพเดตข้อมูลเซ็นเซอร์
-@app.route('/', methods=['POST'])
-def update_data():
-    data = request.get_json()
-    if data:
-        sensor_data.update(data)
-        return jsonify({"status": "success"}), 200
-    return jsonify({"error": "Invalid data"}), 400
-
-# การตั้งค่า threshold ของเซ็นเซอร์
-@app.route('/set_threshold', methods=['GET', 'POST'])
-def set_threshold():
-    message = ""
-    if request.method == 'POST':
-        try:
-            new_threshold = int(request.form['threshold'])
-            sensor_data['threshold'] = new_threshold
-            message = f"✅ Threshold updated to {new_threshold}"
-        except ValueError:
-            message = "❌ Invalid input. Please enter a number."
-
+@app.route("/dashboard")
+def dashboard():
     html = '''
+    <!DOCTYPE html>
     <html>
-        <head>
-            <title>🌟 IoT Control Panel</title>
-            <style>
-                body {
-                    font-family: 'Arial', sans-serif;
-                    background: linear-gradient(to right, #FFB6C1, #FFD700);
-                    color: #333;
-                    margin: 0;
-                    padding: 20px;
-                }
-                h2 {
-                    text-align: center;
-                    color: #FF6347;
-                }
-                table {
-                    width: 100%;
-                    margin: 20px auto;
-                    border-collapse: collapse;
-                    background-color: #FFFFFF;
-                    border-radius: 8px;
-                    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-                }
-                th, td {
-                    padding: 12px;
-                    text-align: center;
-                    font-size: 18px;
-                }
-                th {
-                    background-color: #FF6347;
-                    color: white;
-                    border-radius: 8px 8px 0 0;
-                }
-                td {
-                    background-color: #FFFAF0;
-                    border-radius: 0 0 8px 8px;
-                }
-                button {
-                    background-color: #FF6347;
-                    color: white;
-                    padding: 10px 20px;
-                    border: none;
-                    border-radius: 5px;
-                    font-size: 16px;
-                    cursor: pointer;
-                    transition: background-color 0.3s ease;
-                }
-                button:hover {
-                    background-color: #FF4500;
-                }
-                input[type="number"] {
-                    padding: 8px;
-                    font-size: 16px;
-                    width: 100px;
-                    margin: 10px 0;
-                    border-radius: 5px;
-                    border: 1px solid #ddd;
-                }
-                p {
-                    font-size: 16px;
-                    color: #228B22;
-                    text-align: center;
-                    font-weight: bold;
-                }
-            </style>
-        </head>
-        <body>
-            <h2>🌞 IoT Sensor Dashboard</h2>
-            <table>
-                <tr><th>Sensor</th><th>Value</th></tr>
-                <tr><td>🌡️ Temperature</td><td>{{ temperature }} °C</td></tr>
-                <tr><td>🎚️ Threshold</td><td><b>{{ threshold }} %</b></td></tr>
-                <tr><td>💧 Humidity</td><td>{{ humidity }} %</td></tr>
-            </table>
+    <head>
+        <meta charset="UTF-8">
+        <title>Smart Factory Dashboard</title>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script src="https://bernii.github.io/gauge.js/dist/gauge.min.js"></script>
+        <style>
+            body { font-family: sans-serif; text-align: center; margin: 20px; }
+            .gauge-container { width: 200px; display: inline-block; margin: 20px; }
+            #pmChart { width: 100%; max-width: 600px; margin: auto; }
+            .val-text { font-size: 20px; margin-top: 10px; }
+        </style>
+    </head>
+    <body>
+        <h1>Smart Factory Dashboard</h1>
 
-            <h3 style="text-align:center;">🔧 Update Threshold</h3>
-            <form method="POST" style="text-align: center;">
-                <label for="threshold">New Threshold (%):</label><br>
-                <input type="number" name="threshold" min="0" max="100" value="{{ threshold }}" required>
-                <br><br>
-                <button type="submit">Update</button>
-            </form>
+        <canvas id="pmChart" height="120"></canvas>
 
-            <p>{{ message }}</p>
-        </body>
+        <div class="gauge-container">
+            <h3>Temperature</h3>
+            <canvas id="tempGauge" width="200" height="200"></canvas>
+            <div id="tempVal" class="val-text">-- °C</div>
+        </div>
+
+        <div class="gauge-container">
+            <h3>Humidity</h3>
+            <canvas id="humGauge" width="200" height="200"></canvas>
+            <div id="humVal" class="val-text">-- %</div>
+        </div>
+
+        <script>
+            const pmCtx = document.getElementById('pmChart').getContext('2d');
+            const pmChart = new Chart(pmCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'PM2.5',
+                        data: [],
+                        borderColor: 'blue',
+                        tension: 0.2,
+                        fill: false
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: { min: 0, max: 160 }
+                    }
+                }
+            });
+
+            const tempGauge = new Gauge(document.getElementById("tempGauge")).setOptions({
+                angle: 0, lineWidth: 0.3, radiusScale: 1,
+                pointer: { length: 0.6, strokeWidth: 0.04 },
+                staticZones: [
+                    {strokeStyle: "#30B32D", min: 0, max: 30},
+                    {strokeStyle: "#FFDD00", min: 30, max: 40},
+                    {strokeStyle: "#F03E3E", min: 40, max: 50}
+                ],
+                maxValue: 50, animationSpeed: 32
+            });
+            tempGauge.maxValue = 50;
+
+            const humGauge = new Gauge(document.getElementById("humGauge")).setOptions({
+                angle: 0, lineWidth: 0.3, radiusScale: 1,
+                pointer: { length: 0.6, strokeWidth: 0.04 },
+                staticZones: [
+                    {strokeStyle: "#3E8EF7", min: 0, max: 40},
+                    {strokeStyle: "#FFDD00", min: 40, max: 70},
+                    {strokeStyle: "#F03E3E", min: 70, max: 100}
+                ],
+                maxValue: 100, animationSpeed: 32
+            });
+            humGauge.maxValue = 100;
+
+            let pmHistory = [];
+            let timeLabels = [];
+
+            async function updateDashboard() {
+                const res = await fetch('/');
+                const data = await res.json();
+
+                const temp = data.temperature || 0;
+                const hum = data.humidity || 0;
+                const pm = data.pm25 || 0;
+
+                tempGauge.set(temp);
+                humGauge.set(hum);
+                document.getElementById("tempVal").innerText = `${temp} °C`;
+                document.getElementById("humVal").innerText = `${hum} %`;
+
+                const now = new Date();
+                const timeLabel = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+                timeLabels.push(timeLabel);
+                pmHistory.push(pm);
+
+                if (pmHistory.length > 10) {
+                    pmHistory.shift();
+                    timeLabels.shift();
+                }
+
+                pmChart.data.labels = timeLabels;
+                pmChart.data.datasets[0].data = pmHistory;
+                pmChart.update();
+            }
+
+            setInterval(updateDashboard, 5000);
+            updateDashboard();
+        </script>
+    </body>
     </html>
     '''
-    return render_template_string(
-        html,
-        temperature=sensor_data["temperature"],
-        humidity=sensor_data["humidity"],
-        soil_moisture=sensor_data["soil_moisture"],
-        threshold=sensor_data["threshold"],
-        message=message
-    )
+    return render_template_string(html)
 
-# เริ่มการทำงานของแอป Flask
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000)
