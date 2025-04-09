@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template
 
 app = Flask(__name__)
 
@@ -133,8 +133,12 @@ def set_threshold():
         soil_moisture=sensor_data["soil_moisture"],
         threshold=sensor_data["threshold"],
         message=message
-    
+    )
+
+# Route to render dashboard from a template file
 @app.route('/dashboard')
 def dashboard():
-    return render_template_string(open("dashboard.html").read())
-)
+    return render_template('dashboard.html')
+
+if __name__ == "__main__":
+    app.run(debug=True)
