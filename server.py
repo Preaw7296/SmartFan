@@ -1,30 +1,3 @@
-from flask import Flask, request, jsonify, render_template
-
-app = Flask(__name__)
-
-# Store sensor values in memory
-sensor_data = {
-    "temperature": 0,
-    "humidity": 0,
-    "soil_moisture": 0,
-    "threshold": 50  # Default threshold
-}
-
-# Endpoint for ESP32 / M5Stack to get sensor values and threshold
-@app.route('/', methods=['GET'])
-def get_data():
-    return jsonify(sensor_data)
-
-# Endpoint for ESP32 to POST updated sensor values
-@app.route('/', methods=['POST'])
-def update_data():
-    data = request.get_json()
-    if data:
-        sensor_data.update(data)
-        return jsonify({"status": "success"}), 200
-    return jsonify({"error": "Invalid data"}), 400
-
-# GUI to view and update threshold
 @app.route('/set_threshold', methods=['GET', 'POST'])
 def set_threshold():
     message = ""
@@ -33,10 +6,10 @@ def set_threshold():
             new_threshold = int(request.form['threshold'])
             sensor_data['threshold'] = new_threshold
             message = f"✅ Threshold updated to {new_threshold}"
-        except:
+        except ValueError:
             message = "❌ Invalid input. Please enter a number."
 
-    # Enhanced HTML page with swapped emoji and different order
+    # HTML Page for form and status
     html = '''
     <html>
         <head>
@@ -108,7 +81,6 @@ def set_threshold():
             <h2>🌞 IoT Sensor Dashboard</h2>
             <table>
                 <tr><th>Sensor</th><th>Value</th></tr>
-                
                 <tr><td>🌡️ Temperature</td><td>{{ temperature }} °C</td></tr>
                 <tr><td>🎚️ Threshold</td><td><b>{{ threshold }} %</b></td></tr>
                 <tr><td>💧 Humidity</td><td>{{ humidity }} %</td></tr>
@@ -134,11 +106,3 @@ def set_threshold():
         threshold=sensor_data["threshold"],
         message=message
     )
-
-# Route to render dashboard from a template file
-@app.route('/dashboard')
-def dashboard():
-    return render_template('dashboard.html')
-
-if __name__ == "__main__":
-    app.run(debug=True)
